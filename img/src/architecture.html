@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- architecture: ハンズオンの構成図（README の「構築するアーキテクチャ」、記事「ハンズオンはこちら！」）。
+     README の本文「図の上段はあなたの PC、中段は AWS の中で動く CloudShell、下段は Device Location。AWS の枠の下には、
+     第三者のベンダーが提供するソルバーがある。図の番号は、この README の手順の番号」と一致させる。
+     根拠:
+     - API は AWS IoT Wireless の GetPositionEstimate。CLI は aws iotwireless get-position-estimate（factsheet iotdl-001）
+     - 東京リージョン ap-northeast-1 で呼び出す（iotdl-042）
+     - ソルバー: IP アドレスは MaxMind、Wi-Fi は HERE（iotdl-005。API の説明文）。ソルバーの枠は AWS Cloud の枠の外に置き、
+       AWS のアイコンを使わない。ソルバーが動く場所は書かれていない（iotdl-073）ため、その注記をソルバーの箱の最後の行に置く。
+       data-trail と request-flow でも、ソルバーの箱を AWS の枠の外の灰色の点線の箱にし、同じ注記を箱の中に置く
+     - CloudShell は AWS の側で動き、周囲の Wi-Fi を測れない（README の手順 3）。そのため CloudShell を AWS Cloud の枠の中に描く
+     - 作成する AWS のリソースは無い（iotdl-006）
+     - 手順の番号は README の章立て（1〜8）: 手順 3 で PC のスクリプト scan-wifi-windows.ps1・scan-wifi-linux.sh が wifi.json と ip.json を作る。
+       手順 4-1 で CloudShell にアップロードする。wifi.json は Wi-Fi の推定、ip.json は IP アドレスの推定（手順 4-3）で使うため、
+       アップロードの矢印は特定の箱に入れず、CloudShell のレーンの上辺で止める（レーンの上辺の 4px 手前が矢印の先）。
+       矢印の横位置は、Wi-Fi の箱と答え合わせの箱の間（x ＝ 514〜530）の中心 x ＝ 522 にし、どの箱の真上にも来ないようにする。
+       JSON のアイコンも中心 x ＝ 522 に置く（ノードの幅 170px で x ＝ 437〜607）手順 2-2 で CloudShell の IP アドレスを --ip で送り、任意の手順 4-3 で PC の IP アドレスを
+       --ip で送る（ip.json）。そのため IP アドレスの箱は DESIGN 6.7 の「手順 2」に 4-3 を足して「手順 2・4-3」とした。
+       手順 4〜6 で Wi-Fi の測定値を --wi-fi-access-points で送る。score.py は手順 4-4・5-2・6 で使い、AWS を呼び出さない（矢印を引かない）
+     幅の計算（DESIGN 6.0、6.7）:
+     - AWS Cloud の枠 x ＝ 0〜800、リージョンの枠 x ＝ 26〜774、CloudShell のレーン x ＝ 52〜748、箱は x ＝ 78〜722（使える幅 644px）
+     - 3 つの箱: IP 172・間 16・Wi-Fi 248・間 16・答え合わせ 192 ＝ 644
+       Wi-Fi: 文字の幅 248 − 30 ＝ 218px。--wi-fi-access-points は 21 文字 × 9px ＝ 189px（余裕 29px）
+       答え合わせ: 文字の幅 162px。python3 score.py は 16 文字 × 9px ＝ 144px（余裕 18px）
+       IP: 文字の幅 142px。題「IP アドレスで推定する」は 2 行に折り返す。3 つの箱の高さをそろえる
+     - 矢印の横位置: IP の箱の中心 x ＝ 164、Wi-Fi の箱の中心 x ＝ 390。Device Location の箱は x ＝ 110〜450（幅 340、中心 280）。
+       ソルバーの枠も中心 x ＝ 280、幅 360
+     - 上段の PC の箱は幅 240（scan-wifi-windows.ps1 は 21 文字 × 9px ＝ 189px ＋ 30px ＝ 219px）。JSON のアイコンの中心 x ＝ 522
+     - CloudShell のレーンの説明「あなたがコマンドを実行」は、レーンの右上（上辺の下）に置く。手順 4-1 の矢印（x ＝ 522）は上辺で止まるため重ならない
+     - 縦: 上段のレーンと AWS Cloud の枠の間 64px。各枠の名前の札（高さ約 32px）の下端から 24px 空けて中の枠や箱を始める。
+       CloudShell のレーンの下辺と Device Location の箱の上辺の間 64px。AWS Cloud の枠の下辺とソルバーの枠の間 56px -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 1100px; }
+  .lane > .lt { display: flex; align-items: center; gap: 8px; top: 8px; white-space: nowrap; }
+  .lane > .lt img { width: 32px; height: 32px; }
+  .lane > .sub { position: absolute; right: 24px; top: 13px; font-size: 16px; font-weight: 700; color: #4a4843; white-space: nowrap; }
+  .lane > .lt small { font-size: 16px; font-weight: 700; color: #4a4843; margin-left: 4px; }
+  .grp { position: absolute; border: 2px solid #242f3e; }
+  .grp.region { border: 2px dashed #00a4a6; }
+  .grp > .gl { position: absolute; left: -2px; top: -2px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .grp > .gl img { width: 32px; height: 32px; }
+  .grp > .gl .en { font-family: var(--font-mono); font-weight: 800; font-size: 16px; letter-spacing: .04em; }
+  .grp > .gl .ja { font-size: 16px; font-weight: 900; }
+  .grp > .gl .code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; color: var(--grey); }
+  .bx { position: absolute; border: 3px solid var(--ink); background: #fff; padding: 10px 14px; }
+  .bx b { display: block; font-size: 19px; font-weight: 900; line-height: 1.3; }
+  .bx code { display: block; margin-top: 6px; font-family: var(--font-mono); font-weight: 800; font-size: 15px; line-height: 1.5; white-space: nowrap; }
+  .bx .stp { display: block; margin-top: 8px; font-size: 16px; font-weight: 900; color: var(--hot); }
+  .bx span.d { display: block; margin-top: 4px; font-size: 16px; font-weight: 500; line-height: 1.45; }
+  .bx.hot { border: 4px solid var(--hot); padding-left: 70px; }
+  .bx.hot img { position: absolute; left: 16px; top: 14px; width: 40px; height: 40px; }
+  .bx.hot code { color: var(--hot); }
+  .bx.dash { border: 3px dashed var(--grey); }
+  .node.js { width: 170px; }
+  .node.js img { width: 48px; height: 48px; }
+  .node.js .t { font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
+  .lbl.step { color: var(--ink); font-weight: 900; font-size: 16px; }
+  .fn { position: absolute; font-size: 16px; font-weight: 500; color: #4a4843; line-height: 1.5; white-space: nowrap; }
+  .pt { position: absolute; width: 0; height: 0; }
+  /* ソルバーが動く場所の注記。3 枚の図（architecture・data-trail・request-flow）で同じく、ソルバーの箱の中の最後の行に置く */
+  .bx span.where { margin-top: 6px; color: #4a4843; font-weight: 700; }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <!-- 上段: あなたの PC -->
+  <div class="lane" id="l1" style="left:0;top:0;width:800px"><span class="lt"><img src="../icons/Client.svg">あなたの PC</span></div>
+  <div class="bx" id="pc" data-self="1" style="left:26px;width:240px"><b>周囲の Wi-Fi を測る</b><code>scan-wifi-windows.ps1<br>scan-wifi-linux.sh</code><span class="stp">手順 3</span></div>
+  <div class="node js" id="js" style="left:437px"><img src="../icons/JSONScript.svg"><div class="t">wifi.json・ip.json</div></div>
+  <div class="lbl step" id="lu">手順 4-1 アップロード</div>
+
+  <!-- 中段と下段: AWS Cloud > 東京リージョン > CloudShell と Device Location -->
+  <div class="grp" id="cloud" style="left:0;width:800px"><div class="gl"><img src="../icons/AWSCloudlogo.svg"><span class="en">AWS Cloud</span></div></div>
+  <div class="grp region" id="region" style="left:26px;width:748px"><div class="gl"><img src="../icons/Region.svg"><span class="ja">東京リージョン</span><span class="code">ap-northeast-1</span></div></div>
+  <div class="lane" id="cs" style="left:52px;width:696px"><span class="lt"><img src="../icons/AWSCloudShell.svg">AWS CloudShell</span><span class="sub">あなたがコマンドを実行</span></div>
+  <div class="bx" id="ip" data-self="1" style="left:78px;width:172px"><b>IP アドレスで<br>推定する</b><code>--ip</code><span class="stp">手順 2・4-3</span></div>
+  <div class="bx" id="wf" data-self="1" style="left:266px;width:248px"><b>Wi-Fi で推定する</b><code>--wi-fi-access-points</code><span class="stp">手順 4〜6</span></div>
+  <div class="bx" id="sc" data-self="1" style="left:530px;width:192px"><b>答え合わせを<br>する</b><code>python3 score.py</code><span class="stp">手順 4〜6</span></div>
+  <div class="lbl step" id="la">手順 2・4-3</div>
+  <div class="lbl step" id="lb">手順 4〜6</div>
+  <div class="pt" id="cst" data-self="1"></div>
+  <div class="pt" id="ipb" data-self="1"></div><div class="pt" id="wfb" data-self="1"></div>
+  <div class="pt" id="dla" data-self="1"></div><div class="pt" id="dlb" data-self="1"></div>
+  <div class="bx hot" id="dl" data-self="1" style="left:110px;width:340px"><img src="../icons/AWSIoTCoreDeviceLocation.svg"><b>AWS IoT Core<br>Device Location</b><code>GetPositionEstimate</code><span class="d">AWS IoT Wireless の API</span></div>
+
+  <!-- AWS Cloud の枠の外: ソルバー -->
+  <div class="bx dash" id="sv" data-self="1" style="left:100px;width:360px"><b>第三者のベンダーが<br>提供するソルバー</b><span class="d">IP アドレスは MaxMind<br>Wi-Fi は HERE</span><span class="d where">動く場所は API の<br>説明文に書かれていない</span></div>
+  <div class="fn" id="fn">ソルバーの名前は API の説明文による</div>
+</div>
+<script>
+// 縦の位置は、箱の実際の高さから計算する
+window.addEventListener('load', async () => { await document.fonts.ready;
+  const $ = (id) => document.getElementById(id);
+  const H = (id) => Math.ceil($(id).getBoundingClientRect().height);
+  const W = (id) => Math.ceil($(id).getBoundingClientRect().width);
+  const top = (id, t) => { $(id).style.top = Math.round(t) + 'px'; };
+  const LT = 66, PAD = 26, GL = 56;
+
+  // 上段
+  top('pc', LT); $('pc').style.height = H('pc') + 'px';
+  $('dl').style.height = H('dl') + 'px'; $('sv').style.height = H('sv') + 'px';
+  const pcMid = LT + H('pc') / 2;
+  top('js', pcMid - 24);                  // アイコン（48px）の中心を PC の箱の中心の高さにそろえる
+  const l1h = Math.max(LT + H('pc'), parseFloat($('js').style.top) + H('js')) + PAD;
+  $('l1').style.height = l1h + 'px';
+  // AWS Cloud > リージョン > CloudShell
+  const cloudT = l1h + 64; top('cloud', cloudT);
+  const regT = cloudT + GL; top('region', regT);
+  const csT = regT + GL; top('cs', csT);
+  const bxT = csT + LT;
+  const rowH = Math.max(H('ip'), H('wf'), H('sc'));
+  ['ip', 'wf', 'sc'].forEach((id) => { top(id, bxT); $(id).style.height = rowH + 'px'; });
+  const csH = LT + rowH + PAD; $('cs').style.height = csH + 'px';
+  const dlT = csT + csH + 64; top('dl', dlT);
+  const regH = dlT + H('dl') + PAD - regT; $('region').style.height = regH + 'px';
+  const cloudH = regT + regH + PAD - cloudT; $('cloud').style.height = cloudH + 'px';
+  const svT = cloudT + cloudH + 56; top('sv', svT);
+  const fnT = svT + H('sv') + 24; top('fn', fnT); $('fn').style.left = '0px';
+  $('fig').style.height = (fnT + H('fn')) + 'px';
+  // ラベル
+  top('lu', l1h + (64 - H('lu')) / 2); $('lu').style.left = '534px';
+  const gapT = csT + csH;
+  top('la', gapT + (64 - H('la')) / 2); $('la').style.left = '176px';
+  top('lb', gapT + (64 - H('lb')) / 2); $('lb').style.left = '402px';
+  // 矢印の点
+  const bxB = bxT + rowH;
+  [['ipb', 164, bxB], ['wfb', 390, bxB], ['dla', 164, dlT], ['dlb', 390, dlT]].forEach(([id, x, y]) => { $(id).style.left = x + 'px'; top(id, y); });
+
+  wire('#pc', '#js', {});
+  $('cst').style.left = '522px'; top('cst', csT);
+  wire('#js', '#cst', {from: 'b', to: 't'});
+  wire('#ipb', '#dla', {from: 'b', to: 't'});
+  wire('#wfb', '#dlb', {from: 'b', to: 't'});
+  wire('#dl', '#sv', {from: 'b', to: 't'});
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

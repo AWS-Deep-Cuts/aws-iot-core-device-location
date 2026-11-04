@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- confidence-radius: 信頼度と不確かさの半径（記事「仕組み」の「信頼度と不確かさの半径」、README の手順 5 の冒頭）。
+     根拠（factsheet.md の番号）:
+     - ConfidencePercent は AdvancedConfiguration.WiFiCellular の下にあり、Wi-Fi と携帯基地局の推定の信頼度。50〜99 の整数、省略すると 68。
+       信頼度を上げると不確かさの半径が大きくなり、下げると小さくなる。68 は正規分布のおよそ 1 標準偏差に当たる（iotdl-020。API の説明文）
+     - 信頼度が IP アドレスと GNSS の推定に効くかは書かれていない（iotdl-021）。そのため「指定できる推定」は Wi-Fi と携帯基地局だけを書く
+     - 追加の時期は AWS CLI の変更履歴による（iotdl-039）。図には描かない
+     - 円の大きさ（半径 60・105・160px）と実際の位置（中心から約 82px）は説明用。推定位置が信頼度で変わるかは API の説明文に無いため、
+       3 つの円の中心を同じ点に描く（記事と README は、推定位置が変わるかを手順 5 で確かめると書く）
+     記事と README の本文「この例では、実際の位置は 50 % の円の外にあり、68 % と 95 % の円の中にあります」と一致させる。
+     DESIGN 6.4 の凡例の「信頼度 68 % 既定」は、語順を整えて「既定の信頼度 68 %」にした（下の箱「既定の 68 %」と同じ言い方）。
+     DESIGN 6.4 では 50 % と 95 % の円をどちらも灰色の細い線としているが、凡例で 2 つを見分けられるように、95 % の円だけを灰色の細い点線にした。
+     幅の計算（DESIGN 6.0、6.4）:
+     - 枠の左の線から 26px で円の左端、円の直径 320px（中心の x ＝ 186）、円の右端（x ＝ 346）から 48px 空けて凡例（x ＝ 394）
+     - 凡例の最長の行は、見本 40 ＋ 間 12 ＋「既定の信頼度 68 %」約 150 ＝ 約 202px。枠の右の線まで 180px 以上空く
+     - 札の下端（約 30px）から 24px 以上空けて円の上端（y ＝ 56）、円の下端（y ＝ 376）から 26px で枠の下の線
+     - 下の 2 × 2 の箱は 392 × 88px、間 16px -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 664px; }
+  .group > .gl.ja { font-family: var(--font-body); font-size: 16px; font-weight: 900; letter-spacing: 0; background: var(--grey); color: #fff; padding: 3px 12px; }
+  .ring { position: absolute; border-radius: 50%; border: 2px solid var(--grey); }
+  .ring.hot { border: 4px solid var(--hot); }
+  .ring.dash { border-style: dashed; }
+  .dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--hot); }
+  .x { position: absolute; font-family: var(--font-mono); font-weight: 800; font-size: 28px; line-height: 30px; height: 30px; width: 30px; text-align: center; color: var(--ink); overflow: hidden; }
+  .legend { position: absolute; left: 394px; top: 76px; }
+  .legend .row { display: flex; align-items: center; height: 36px; font-size: 17px; font-weight: 700; }
+  .legend .smp { width: 40px; height: 30px; margin-right: 12px; position: relative; }
+  .legend .smp .ln { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--grey); }
+  .legend .smp .ln.dash { background: repeating-linear-gradient(90deg, var(--grey) 0 7px, transparent 7px 12px); }
+  .legend .smp .ln.hot { height: 4px; margin-top: -2px; background: var(--hot); }
+  .legend .smp .d { position: absolute; left: 12px; top: 7px; width: 16px; height: 16px; border-radius: 50%; background: var(--hot); }
+  .legend .smp .xx { position: absolute; left: 5px; top: 0; font-family: var(--font-mono); font-weight: 800; font-size: 28px; line-height: 30px; height: 30px; width: 30px; text-align: center; overflow: hidden; }
+  .note { position: absolute; font-size: 16px; font-weight: 500; line-height: 1.5; color: #4a4843; }
+  .q { position: absolute; width: 392px; height: 88px; border: 2px solid var(--ink); background: #fff; padding: 12px 16px; }
+  .q b { display: block; font-size: 18px; font-weight: 900; line-height: 1.35; }
+  .q span { display: block; margin-top: 4px; font-size: 16px; font-weight: 500; line-height: 1.4; }
+  .q.hot { border: 3px solid var(--hot); }
+  .q.hot b { color: var(--hot); }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <div class="group dashed" style="left:0;top:0;width:800px;height:404px"><div class="gl ja">説明用の図</div></div>
+
+  <!-- 同心円（中心 x=186, y=216）。内側から信頼度 50 %・68 %・95 % -->
+  <div class="ring dash" style="left:26px;top:56px;width:320px;height:320px"></div>
+  <div class="ring hot" style="left:81px;top:111px;width:210px;height:210px"></div>
+  <div class="ring" style="left:126px;top:156px;width:120px;height:120px"></div>
+  <div class="dot" style="left:178px;top:208px"></div>
+  <!-- 実際の位置: 中心から右上へ (58, -58)、距離約 82px。50 % の円の外、68 % の円の中 -->
+  <div class="x" style="left:229px;top:143px">×</div>
+
+  <div class="legend">
+    <div class="row"><span class="smp"><span class="d"></span></span>推定位置</div>
+    <div class="row"><span class="smp"><span class="xx">×</span></span>実際の位置</div>
+    <div class="row"><span class="smp"><span class="ln"></span></span>信頼度 50 %</div>
+    <div class="row"><span class="smp"><span class="ln hot"></span></span>既定の信頼度 68 %</div>
+    <div class="row"><span class="smp"><span class="ln dash"></span></span>信頼度 95 %</div>
+  </div>
+  <div class="note" style="left:394px;top:274px;width:340px">この例では、実際の位置は 50 % の円の外、<br>68 % と 95 % の円の中</div>
+
+  <!-- 下: 2 × 2 の箱 -->
+  <div class="q" style="left:0;top:420px"><b>信頼度を上げる</b><span>不確かさの半径が大きくなる</span></div>
+  <div class="q" style="left:408px;top:420px"><b>信頼度を下げる</b><span>不確かさの半径が小さくなる</span></div>
+  <div class="q hot" style="left:0;top:524px"><b>既定の 68 %</b><span>正規分布のおよそ 1 標準偏差に当たる</span></div>
+  <div class="q" style="left:408px;top:524px"><b>指定できる推定</b><span>Wi-Fi と携帯基地局</span></div>
+
+  <div class="note" style="left:0;top:640px">API の説明文による。円の大きさと実際の位置は説明用</div>
+</div>
+<script>
+window.addEventListener('load', async () => { await document.fonts.ready;
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>
