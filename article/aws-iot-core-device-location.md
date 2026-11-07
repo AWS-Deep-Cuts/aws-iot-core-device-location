@@ -108,9 +108,7 @@ Device Location の API が AWS IoT Wireless の API に含まれているのは
 3. AWS CLI は、HTTPS のリクエスト `POST /position-estimate` を、東京リージョンのエンドポイント `api.iotwireless.ap-northeast-1.amazonaws.com` に送ります。このリクエストには、AWS CLI があなたの認証情報から計算した署名が付いています。このようなリクエストを**署名付きのリクエスト**と呼び、AWS は署名で、誰が送ったリクエストかを確かめます。AWS IoT Wireless の API が、このリクエストを受け付けます。
 4. API の説明文によると、Wi-Fi の測定値からは、HERE が提供する Wi-Fi のソルバーが位置を求めます。
 5. Device Location が、推定位置を含む応答の GeoJSON を返します。
-6. AWS CLI は、応答の GeoJSON を、コマンドで指定したファイルに書き込みます。標準出力、つまり CloudShell の画面には、何も表示されません。
-
-<!-- 要確認: C-02。CloudShell の AWS CLI でも、応答が出力先のファイルに書き込まれ、画面に何も表示されないか -->
+6. AWS CLI は、応答の GeoJSON を、コマンドで指定したファイルに書き込みます。標準出力、つまり CloudShell の画面には、何も表示されません。筆者が AWS CLI 2.39.4 で確かめたところ、コマンドは何も表示せずに終わり、応答は指定したファイルに書き込まれていました。
 
 図の 2 で実行する AWS CLI のコマンドは、次のとおりです。
 
@@ -126,10 +124,8 @@ aws iotwireless get-position-estimate wifi-68.geojson \
 
 :::note warn
 **出力先のファイルの名前はコマンド名の直後に書く**
-AWS CLI 2.39.0 では、出力先のファイルの名前を `--wi-fi-access-points` より後ろに書くと、AWS CLI はファイルの名前をアクセスポイントの一覧の要素として読み、`the following arguments are required: outfile` のエラーで止まります。間に `--region` を挟んでも、コマンドの最後に書いても、結果は同じです。`--ip` のように 1 つの値を取るオプションの後ろであれば通りますが、迷わないように、出力先のファイルの名前はコマンド名の直後に書くのが確実です。
+筆者が AWS CLI 2.39.4 で確かめたところ、出力先のファイルの名前を `--wi-fi-access-points` より後ろに書くと、AWS CLI はファイルの名前をアクセスポイントの一覧の要素として読み、`the following arguments are required: outfile` のエラーで止まります。間に `--region` を挟んでも、コマンドの最後に書いても、結果は同じです。`--ip` のように 1 つの値を取るオプションの後ろであれば通りますが、迷わないように、出力先のファイルの名前はコマンド名の直後に書くのが確実です。
 :::
-
-<!-- 要確認: 著者が CloudShell の AWS CLI で、引数の順序の挙動を確かめる（evidence/cli-argorder-revision.txt）。確かめたら、確かめた版と「筆者が確かめたところ」を書く -->
 
 このコマンドで送られる本文と、返ってくる応答の GeoJSON に含まれるものは、次の図のとおりです。リクエストの本文の値は、説明用の値です。図の本文の `AdvancedConfiguration` は、信頼度を指定した場合の例です。上のコマンドは信頼度を指定していないため、実際に送られる本文には `AdvancedConfiguration` は含まれません。
 
@@ -142,9 +138,12 @@ AWS CLI 2.39.0 では、出力先のファイルの名前を `--wi-fi-access-poi
 - `AdvancedConfiguration` の中の `ConfidencePercent` は信頼度で、省略できます。次の節で説明します。
 - 位置を求める時刻を、`Timestamp` で指定することもできます。省略すると、AWS がリクエストを受け取った時刻が使われます。
 
-一方、応答の GeoJSON については、時刻・WGS84 の座標・精度・信頼度が含まれることが API の説明文に書かれているだけで、項目の名前と単位は API の仕様に書かれていません。そのため、この記事では項目の名前を挙げず、ハンズオンで実物を確かめます。
+一方、応答の GeoJSON については、時刻・WGS84 の座標・精度・信頼度が含まれることが API の説明文に書かれているだけで、項目の名前と単位は API の仕様に書かれていません。筆者が確かめた応答の実物は、次のとおりでした。
 
-<!-- 要確認: C-03。著者が CloudShell で確かめた応答の実物を、座標を説明用の値に置き換えてここに載せる。項目の名前・精度の単位・座標の順序を、実物に合わせて本文にも書く -->
+- 応答は GeoJSON の `Point` で、`coordinates` は経度、緯度の順です。
+- 精度は `properties` の `horizontalAccuracy` です。単位は応答に書かれていませんが、Wi-Fi の推定で数百、IP アドレスの推定で 10000 という値の大きさから、メートル単位の不確かさの半径と読めます。
+- 信頼度は `horizontalConfidenceLevel` で、百分率ではなく 0〜1 の小数です。信頼度を指定しなかった場合は `0.68` でした。
+- IP アドレスの推定の応答には、これらに加えて `country`・`state`・`city`・`postalCode` が含まれました。
 
 :::note info
 **コンソールで位置を推定する画面**

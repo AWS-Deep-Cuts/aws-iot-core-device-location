@@ -207,7 +207,7 @@ ls -ld "${WORK_DIR}"
 
 この README の `get-position-estimate` のコマンドは、すべて次の決まりで書きます。
 
-- 応答を書き込む **出力先のファイル** の名前を、コマンド名 `get-position-estimate` の直後に書きます。出力先のファイル名を `--wi-fi-access-points` より後ろに書くと、間に `--region` があっても、コマンドの最後に書いても、AWS CLI はファイル名をアクセスポイントの一覧の要素として読みます。その結果、`the following arguments are required: outfile` のエラーで止まります。AWS CLI 2.39.0 で確かめた結果です。<!-- 要確認: 著者が CloudShell の AWS CLI で、引数の順序の挙動を確かめる（evidence/cli-argorder-revision.txt）。確かめたら、確かめた版と「筆者が確かめた」を書く -->
+- 応答を書き込む **出力先のファイル** の名前を、コマンド名 `get-position-estimate` の直後に書きます。出力先のファイル名を `--wi-fi-access-points` より後ろに書くと、間に `--region` があっても、コマンドの最後に書いても、AWS CLI はファイル名をアクセスポイントの一覧の要素として読みます。その結果、`the following arguments are required: outfile` のエラーで止まります。筆者が AWS CLI 2.39.4 で確かめた結果です。
 - `--region "${REGION}"` を必ず付けます。
 - 出力先のファイルは、CloudShell の work フォルダに保存します。
 - あなたの PC の MAC アドレスや IP アドレスのような、個人に結び付く値は、コマンドの文字列に書きません。ファイルに保存して `file://` で渡します。シェルの履歴に残さないためです。
@@ -272,13 +272,37 @@ python3 -m json.tool "${WORK_DIR}/cloudshell-ip.geojson"
 
 API の説明文によると、応答の GeoJSON には、時刻、WGS84 の座標、精度、信頼度が含まれます。WGS84 は、緯度と経度を表すときに使う世界共通の基準の 1 つです。表示された項目の中から、精度の値を探し、答え合わせ表の 2-2 の行の「精度の値」の列に書き留めてください。手順 4-2 の Wi-Fi の推定の精度の値と比べます。
 
+出力の形の例は次のとおりです。値は説明用です。
+
+```json
+{
+    "coordinates": [
+        139.0000000,
+        35.0000000
+    ],
+    "type": "Point",
+    "properties": {
+        "country": "<国>",
+        "city": "<市区町村>",
+        "postalCode": "<郵便番号>",
+        "horizontalAccuracy": 10000,
+        "horizontalConfidenceLevel": 0.67,
+        "state": "<都道府県>",
+        "timestamp": "2026-11-05T01:05:00.123456789Z"
+    }
+}
+```
+
+- `coordinates` は推定位置の座標です。GeoJSON の決まりどおり、経度、緯度の順です。
+- 精度の値は `properties` の `horizontalAccuracy` です。単位は応答に書かれていませんが、値の大きさから、メートル単位の不確かさの半径と読めます。筆者の環境では、IP アドレスの推定で 10000（10 km）でした。
+- 信頼度の値は `horizontalConfidenceLevel` です。百分率ではなく、0〜1 の小数です。IP アドレスの推定では、信頼度を指定できません。
+- IP アドレスの推定の応答には、国・都道府県・市区町村・郵便番号の推定も含まれます。Wi-Fi の推定の応答には含まれません。
+
 どの項目が精度か分からない場合は、次のコマンドで、手順 4-4 で使う `score.py` に、精度の値と項目の名前を表示させます。`score.py` は AWS を呼び出しません。CloudShell の IP アドレスの推定は、あなたの居場所の推定ではないため、`score.py` は実際の位置を尋ねません。
 
 ```bash
 python3 "${HANDSON_DIR}/score.py" "${WORK_DIR}/cloudshell-ip.geojson"
 ```
-
-<!-- 要確認: C-03。著者が CloudShell で確かめた応答の実物を見て、項目名・精度の単位・座標の順序をここに書く。座標を説明用の値に置き換えた出力の形の例を、「出力の形の例。値は説明用です」と断って載せる -->
 
 <!-- 画面写真: CloudShell の python3 -m json.tool の出力。応答の項目を枠で囲む。CloudShell の推定位置のため、隠すものは無い -->
 
@@ -331,8 +355,6 @@ AWS CloudTrail は、AWS の API の呼び出しを記録するサービスで�
 > - **やること**: 手順 2-2 のコマンドが画面に何も表示しなかったことと、手順 2-3 の `ls` と `json.tool` の結果を確認します。手順 2-4 の 3 行を確認します。
 > - **期待する結果**: 手順 2-2 のコマンドは、何も表示せずに終わります。CloudShell の work フォルダに `cloudshell-ip.geojson` があり、中身は JSON です。手順 2-4 では、宛先が `api.iotwireless.ap-northeast-1.amazonaws.com`、パスが `/position-estimate`、本文が `{"Ip": {"IpAddress": "..."}}` の形です。
 > - **ここから分かること**: `aws iotwireless` のコマンドは、AWS IoT Core ではなく、AWS IoT Wireless の API の宛先にリクエストを送っています。リクエストに含まれるのは測定値だけで、AWS のリソースの ID は含まれていません。応答は、画面ではなく出力先のファイルに書き込まれます。
-
-<!-- 要確認: C-02。CloudShell の AWS CLI でも、応答が出力先のファイルに書き込まれ、画面に何も表示されないか -->
 
 ## ３．PC で周囲の Wi-Fi を測る
 
