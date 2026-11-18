@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- request-flow: ハンズオンの場合の 1 回の位置の推定（記事「仕組み」の「1 回の位置の推定で起きること」、README の手順 4-2）。
+     上の枠はあなたが行う操作、下の枠は AWS が自動で行う処理。4 のソルバーは、どちらの枠にも入れず、AWS の枠の外に置く。
+     番号 1〜6 は、記事の番号付きの説明 1〜6 と同じ。
+     配置の方針:
+     - architecture と data-trail では、ソルバーの箱を AWS の枠の外の灰色の点線の箱にしている。この図でも同じにし、
+       「動く場所は API の説明文に書かれていない」の注記を、3 枚の図で同じくソルバーの箱の最後の行に置く
+     - 灰色の点線の箱は、第三者のベンダーが提供するものを表す。箱の中にも「第三者のベンダーである HERE が提供する」と書く
+     - 前の版は左右の 2 列で、右の枠の上の約 4 分の 1 が空いていた。上下の 2 段にし、3 と 5 を AWS の枠の見出しの直下に置いて空白を無くした
+     根拠（factsheet.md の番号）:
+     - API は AWS IoT Wireless の GetPositionEstimate。CLI は aws iotwireless get-position-estimate（iotdl-001）
+     - リクエストは POST /position-estimate。東京リージョンのエンドポイントは api.iotwireless.ap-northeast-1.amazonaws.com（iotdl-001、
+       設計者の空打ちの E。README の手順 2-4 の --debug の出力と同じ）
+     - Wi-Fi の測定値は HERE が提供するソルバーで解決される（iotdl-004、005。API の説明文）。ソルバーが動く場所は書かれていない（iotdl-073）
+     - 応答の GeoJSON には時刻・WGS84 の座標・精度・信頼度が入る（iotdl-022）。項目の名前は描かない
+     - AWS CLI は応答の本文を出力先のファイル（outfile）に書き込み、標準出力は空になる（iotdl-027、029。CloudShell では C-02 で要確認）
+     - 出力先のファイルの名前 wifi-68.geojson と wifi.json は README の手順 4-2 のコマンドと同じ
+     - 署名付きのリクエスト（DESIGN.md 3 章の用語）
+     幅の計算（DESIGN 6.0、6.2）:
+     - 上の枠と下の枠は x ＝ 0〜800。中身は x ＝ 26〜774（748px）
+     - 1 は上の枠の幅いっぱい（748px）。その下に 2 つの列: 左の列（2 と 3）444・間 36・右の列（6 と 5）268 ＝ 748
+       左の列は x ＝ 26〜470（中心 248）、右の列は x ＝ 506〜774（中心 640）
+     - 左の列の中心を 248 にするのは、下の枠の名前「AWS が自動で行う処理」（x ＝ 14〜約 210）と 2 → 3 の矢印が重ならないようにするため
+     - 2 のコードは記事のコマンドと同じ 2 行（最長 --wi-fi-access-points file://wifi.json は 38 文字 × 9px ＝ 342px）
+     - 左の列の文字の幅は 444 − 30 ＝ 414px。エンドポイント api.iotwireless.ap-northeast-1.amazonaws.com は 44 文字 × 9px ＝ 396px
+     - 右の列の文字の幅は 268 − 30 ＝ 238px（6 は枠線 4px のため 236px）。「標準出力には何も表示されない」は 14 文字 × 16px ＝ 224px
+     - ソルバーの箱は、AWS の枠の下辺から 56px 下に、x ＝ 26〜774。矢印の点を箱の上辺の x ＝ 248 と 640 に置く
+     - 1 → 2、2 → 3、3 → 4 は x ＝ 248、4 → 5、5 → 6 は x ＝ 640 の垂直の矢印。ラベルは各矢印の右 12px
+     - 縦: 枠の上端から中身まで 60px、中身から枠の下端まで 26px、上の枠と下の枠の間 72px、1 と 2 の間 56px -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 920px; }
+  .tag { font-size: 16px; }
+  .st > i { display: block; line-height: 36px; }
+  .st > img { top: 8px; }
+  .st > b { margin-top: 0; }
+  .st > code { display: block; margin-top: 6px; line-height: 1.45; white-space: nowrap; }
+  .st.dim { border: 3px dashed var(--grey); }
+  .st > span.where { margin-top: 6px; color: #4a4843; font-weight: 700; }
+  .lbl.ink { color: var(--ink); line-height: 1.4; }
+  .lbl.c { text-align: center; }
+  .fn { position: absolute; font-size: 16px; font-weight: 500; color: #4a4843; line-height: 1.5; white-space: nowrap; }
+  .pt { position: absolute; width: 0; height: 0; }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <div class="tag" style="left:0;top:0">ハンズオンの場合</div>
+
+  <!-- 上の枠: あなたが行う操作 -->
+  <div class="lane" id="la" style="left:0;top:44px;width:800px"><span class="lt">あなたが行う操作</span></div>
+  <div class="st" id="s1" data-self="1" style="left:26px;width:748px"><img src="../icons/Client.svg"><i>1</i><b>周囲の Wi-Fi を測る</b><span>PC のスクリプトが <code>wifi.json</code> を作成する</span></div>
+  <div class="pt" id="s1a" data-self="1"></div>
+  <div class="lbl ink" id="u1">wifi.json をアップロード</div>
+  <div class="st" id="s2" data-self="1" style="left:26px;width:444px"><img src="../icons/AWSCloudShell.svg"><i>2</i><b>推定を依頼する</b><code>aws iotwireless get-position-estimate<br>--wi-fi-access-points file://wifi.json</code></div>
+  <div class="st hot" id="s6" data-self="1" style="left:506px;width:268px"><i>6</i><b>応答を出力先の<br>ファイルに書き込む</b><code>wifi-68.geojson</code><span>標準出力には何も表示されない</span></div>
+
+  <div class="lbl ink" id="u2">署名付きのリクエスト</div>
+  <div class="lbl ink" id="u3">応答の本文</div>
+
+  <!-- 下の枠: AWS が自動で行う処理 -->
+  <div class="lane aws" id="lb" style="left:0;width:800px"><span class="lt">AWS が自動で行う処理</span></div>
+  <div class="st" id="s3" data-self="1" style="left:26px;width:444px"><img src="../icons/AWSIoTCoreDeviceLocation.svg"><i>3</i><b>API がリクエストを受け付ける</b><code>POST /position-estimate<br>api.iotwireless.ap-northeast-1.amazonaws.com</code></div>
+  <div class="st" id="s5" data-self="1" style="left:506px;width:268px"><i>5</i><b>応答の GeoJSON を返す</b><span>時刻・WGS84 の座標・<br>精度・信頼度</span></div>
+
+  <!-- AWS の枠の外: ソルバー（第三者のベンダー。AWS のアイコンを使わない） -->
+  <div class="st dim" id="s4" data-self="1" style="left:26px;width:748px"><i>4</i><b>ソルバーが位置を求める</b><span>第三者のベンダーである HERE が提供する Wi-Fi のソルバー</span><span class="where">動く場所は API の説明文に書かれていない</span></div>
+  <div class="pt" id="s4a" data-self="1"></div><div class="pt" id="s4b" data-self="1"></div>
+
+  <div class="fn" id="fn">ソルバーの名前は API の説明文による</div>
+</div>
+<script>
+// 縦の位置は、箱の実際の高さから計算する
+window.addEventListener('load', async () => { await document.fonts.ready;
+  const $ = (id) => document.getElementById(id);
+  const H = (id) => Math.ceil($(id).getBoundingClientRect().height);
+  const put = (id, l, t) => { if (l !== null) $(id).style.left = Math.round(l) + 'px'; $(id).style.top = Math.round(t) + 'px'; };
+  const LT = 60, PAD = 26, GAP = 72, G12 = 56;
+  const XL = 248, XR = 640;
+
+  // 上の枠
+  const aT = 44;
+  put('s1', null, aT + LT);
+  const s1B = aT + LT + H('s1');
+  put('s1a', XL, s1B);
+  const r2T = s1B + G12, row2 = Math.max(H('s2'), H('s6'));
+  ['s2', 's6'].forEach((id) => { put(id, null, r2T); $(id).style.height = row2 + 'px'; });
+  put('u1', XL + 12, s1B + (G12 - H('u1')) / 2);
+  const aH = r2T + row2 + PAD - aT; $('la').style.height = aH + 'px';
+  // 下の枠
+  const bT = aT + aH + GAP; $('lb').style.top = bT + 'px';
+  const rowB = Math.max(H('s3'), H('s5'));
+  ['s3', 's5'].forEach((id) => { put(id, null, bT + LT); $(id).style.height = rowB + 'px'; });
+  const bH = LT + rowB + PAD; $('lb').style.height = bH + 'px';
+  // 枠の間のラベル
+  const gT = aT + aH;
+  put('u2', XL + 12, gT + (GAP - H('u2')) / 2);
+  put('u3', XR + 12, gT + (GAP - H('u3')) / 2);
+  // ソルバー
+  const sT = bT + bH + 56; put('s4', null, sT);
+  put('s4a', XL, sT); put('s4b', XR, sT);
+  const fT = sT + H('s4') + 16; put('fn', 0, fT);
+  $('fig').style.height = (fT + H('fn')) + 'px';
+
+  wire('#s1a', '#s2', {from: 'b', to: 't'});
+  wire('#s2', '#s3', {from: 'b', to: 't'});
+  wire('#s3', '#s4a', {from: 'b', to: 't'});
+  wire('#s4b', '#s5', {from: 't', to: 'b'});
+  wire('#s5', '#s6', {from: 't', to: 'b', hot: true});
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

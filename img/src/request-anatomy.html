@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- request-anatomy: リクエストの本文と、応答の GeoJSON に含まれるもの（記事「仕組み」の「1 回の位置の推定で起きること」、README の手順 4-2）。
+     根拠（factsheet.md の番号）:
+     - リクエストに AWS のリソースを指定する項目は無い。必須の項目も無い（iotdl-006）
+     - WiFiAccessPoints の各要素は MacAddress と Rss の 2 つで、どちらも必須。Rss は dBm で -128〜0 の整数（iotdl-010）
+     - SSID を送る項目は無い（iotdl-010。botocore iotwireless 2020-11-22 の WiFiAccessPoint の型）
+     - ConfidencePercent は AdvancedConfiguration.WiFiCellular の下。50〜99、省略すると 68（iotdl-020）
+     - Timestamp は任意（iotdl-019）。この図では描かない（記事の本文の箇条書きで説明する）
+     - 応答の GeoJSON には時刻・WGS84 の座標・精度・信頼度が入る。項目の名前と単位はモデルに無い（iotdl-022、023）。そのため項目の名前を描かない
+       右の列は左の列の言い換えにせず、説明文から言える範囲で中身を書く: 時刻は「推定の時点」（Timestamp の説明「位置を解決する時点」。iotdl-019）、
+       精度は accuracy の訳で単位は仕様に無い（iotdl-022）、信頼度は Wi-Fi と携帯基地局で省略すると 68（iotdl-020）
+     - 値は説明用: MAC アドレスは 00:00:5E:00:53:01、Rss は -52（README の手順 3 の netsh の例 96 % を換算した値と同じ）
+       README の手順 4-2 は信頼度を指定しないため AdvancedConfiguration を含まない。図の本文は、信頼度を指定した場合の形として 68 を示す
+       （README は図の直後に「この手順では信頼度を指定していないため、本文に AdvancedConfiguration は含まれていません」と書く）
+     幅の計算（DESIGN 6.0、6.3）:
+     - カード 440・線 40・注釈の欄 320 ＝ 800
+     - カード: 最長の行「      "MacAddress": "00:00:5E:00:53:01",」は 40 文字 × 9px ＝ 360px。左右 30px を足して 390px（余裕 50px）
+     - pre の line-height を 2.0（1 行 30px）にし、4 行目（MacAddress）と 5 行目（Rss）の注釈（高さ 22px）の間を 8px 空ける
+     - 注釈: いちばん長い「アクセスポイントの MAC アドレス」は約 262px で、320px の欄に 1 行で収まる
+     - カードの下の注記は、矢印（x ＝ 220）と重ならないように、注釈の欄の 12〜14 行目の高さに置く -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 900px; }
+  #req > pre { line-height: 30px; }
+  .card > pre b { font-weight: 800; }
+  .card > pre .hl { color: var(--hot); background: #ffe9df; }
+  .card > .h small { font-size: 16px; font-weight: 700; color: #cfcabd; margin-left: 10px; }
+  .ann { position: absolute; left: 480px; font-size: 16px; font-weight: 700; line-height: 22px; white-space: nowrap; }
+  .note { position: absolute; font-size: 16px; font-weight: 500; line-height: 1.5; color: #4a4843; }
+  .note code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; color: var(--ink); }
+  .lbl.code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; color: var(--ink); }
+  .rows { width: 100%; border-collapse: collapse; font-size: 16px; }
+  .rows td { padding: 8px 12px; border-top: 1.5px solid var(--line); line-height: 1.4; }
+  .rows tr:first-child td { border-top: 0; }
+  .rows td:first-child { font-weight: 900; width: 150px; }
+  .rows td:last-child { font-weight: 500; }
+  .pt { position: absolute; width: 0; height: 0; }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <!-- 上: リクエストの本文（説明用の値） -->
+  <div class="card" id="req" style="left:0;top:0;width:440px">
+    <div class="h">リクエストの本文<small>説明用の値</small></div>
+<pre>{
+  "WiFiAccessPoints": [
+    {
+      <span class="hl" id="k1">"MacAddress": "00:00:5E:00:53:01"</span>,
+      <span class="hl" id="k2">"Rss": -52</span>
+    },
+    <i>...</i>
+  ],
+  "AdvancedConfiguration": {
+    "WiFiCellular": {
+      <span class="hl" id="k3">"ConfidencePercent": 68</span>
+    }
+  }
+}</pre>
+  </div>
+  <!-- 注釈と、カードの右辺から注釈への水平の線（行の中心の高さ） -->
+  <div class="pt" id="c1" data-self="1"></div><div class="pt" id="c2" data-self="1"></div><div class="pt" id="c3" data-self="1"></div>
+  <div class="ann" id="a1" data-self="1">アクセスポイントの MAC アドレス</div>
+  <div class="ann" id="a2" data-self="1">受信信号強度。dBm で -128〜0</div>
+  <div class="ann" id="a3" data-self="1">信頼度。50〜99。省略すると 68</div>
+  <div class="note" id="n1" style="left:480px;width:300px"><code>...</code> は 2 台目以降の<br>アクセスポイントの省略<br>SSID を送る項目は無い<br>リソースの ID も指定しない</div>
+
+  <!-- 中: 呼び出し -->
+  <div class="lbl code" id="lc" style="left:232px">GetPositionEstimate</div>
+
+  <!-- 下: 応答の GeoJSON に含まれるもの -->
+  <div class="card hot" id="res" style="left:0;width:440px">
+    <div class="h">応答の GeoJSON に含まれるもの</div>
+    <table class="rows">
+      <tr><td>時刻</td><td>推定の時点を表す時刻</td></tr>
+      <tr><td>WGS84 の座標</td><td>推定位置の緯度と経度</td></tr>
+      <tr><td>精度</td><td>推定位置の正確さを表す値。<br>単位は仕様に書かれていない</td></tr>
+      <tr><td>信頼度</td><td>この推定の信頼度。<br>Wi-Fi で指定を省くと 68</td></tr>
+    </table>
+  </div>
+  <div class="note" id="n2" style="left:0;width:800px">API の説明文による。項目の名前と単位は、ハンズオンで実物を確かめる</div>
+</div>
+<script>
+window.addEventListener('load', async () => { await document.fonts.ready;
+  const fig = document.getElementById('fig').getBoundingClientRect();
+  const req = document.getElementById('req'), rq = req.getBoundingClientRect();
+  const yOf = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.top - fig.top + r.height / 2; };
+  // 注釈を、対応する行の中心の高さに置く
+  [1, 2, 3].forEach((i) => {
+    const y = Math.round(yOf('k' + i));
+    const c = document.getElementById('c' + i); c.style.left = (rq.right - fig.left) + 'px'; c.style.top = y + 'px';
+    const a = document.getElementById('a' + i); a.style.top = (y - 11) + 'px';
+  });
+  const bottom = rq.bottom - fig.top;
+  // 注記は、注釈の欄の、3 つ目の注釈より下に置く
+  document.getElementById('n1').style.top = (Math.round(yOf('k3')) + 40) + 'px';
+  const n1b = document.getElementById('n1').getBoundingClientRect().bottom - fig.top;
+  const top2 = Math.round(Math.max(bottom, n1b) + 88);
+  document.getElementById('res').style.top = top2 + 'px';
+  document.getElementById('lc').style.top = (Math.round((bottom + top2) / 2) - 11) + 'px';
+  const resB = document.getElementById('res').getBoundingClientRect().bottom - fig.top;
+  document.getElementById('n2').style.top = (Math.round(resB) + 16) + 'px';
+  document.getElementById('fig').style.height = (Math.round(resB) + 16 + 24) + 'px';
+  [1, 2, 3].forEach((i) => wire('#c' + i, '#a' + i, {noarrow: true}));
+  wire('#req', '#res', {from: 'b', to: 't'});
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

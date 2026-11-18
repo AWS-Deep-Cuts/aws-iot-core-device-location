@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- data-trail-handson: 測定値と推定位置がどこに渡り、どこに残るか（README の手順 7 で使う。記事では data-trail.png を使う）。
+     README の読者向けに、札に手順の番号と cleanup.sh を書く。記事用の data-trail.html は、札を手順の番号に頼らない言葉にした版。
+     根拠:
+     - 作成する AWS のリソースは無い（factsheet iotdl-006）
+     - 測定値は AWS を経由して第三者のベンダーのソルバーで処理される（iotdl-004、005）。保存や処理の場所の一次情報は無い（iotdl-073）。
+       そのため、ソルバーの札は「送った測定値の扱いは API の仕様に書かれていない」とする
+     - Wi-Fi の測定値は周囲のアクセスポイントの MAC アドレス、推定位置は測った場所を表す（iotdl-072、075）
+     - PC の作業フォルダ iotdl-handson には wifi.json と ip.json（README の手順 3-2）。手順 7 であなたがフォルダごと削除する
+     - CloudShell の work フォルダ（hands-on/work）には測定値と応答の GeoJSON。hands-on/cleanup.sh の [1/3] が削除する
+     - ソルバーの名前は README の構成図と同じ: IP アドレスは MaxMind、Wi-Fi は HERE（iotdl-005）
+     - CloudTrail のイベント履歴に GetPositionEstimate が記録されるかは未確認（C-22）。README の手順 2-5 で確かめる。
+       DESIGN 6.6 の「記録の有無と中身は要確認」は、読者向けに「記録されるかは手順 2-5 で確かめる」とした。
+       C-22 で CloudTrail に記録されないと分かれば、段 3 の右の箱・矢印・札を削る
+     - 札に読点を使わないため、DESIGN の「記録される場合、利用者は削除できない」を「記録される場合は利用者が削除できない」とした
+     幅の計算（DESIGN 6.0、6.6）:
+     - 各レーンの中は 800 − 52 ＝ 748px。左の箱は 340px（x ＝ 26〜366、中心 196）。文字の幅は 310px で、16px の説明は 1 行 19 文字
+     - 段 3 の右の箱は 260px（x ＝ 514〜774）。2 つの箱の間は 148px で、ラベル「呼び出しの記録」7 文字 × 16px ＋ 8px ＝ 120px が入る
+     - 段の間は 72px。段 2 と段 3 の間の 2 本の矢印は x ＝ 136 と 256（120px ずらす）。ラベルは各矢印の右
+     - ソルバーの箱は Device Location の箱と同じ x と幅（x ＝ 26〜366）で、中心の横位置をそろえる -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 1000px; }
+  .lane > .lt { display: flex; align-items: center; gap: 8px; top: 8px; }
+  .lane > .lt img { width: 32px; height: 32px; }
+  .bx { position: absolute; border: 3px solid var(--ink); background: #fff; padding: 10px 14px; }
+  .bx b { display: block; font-size: 19px; font-weight: 900; line-height: 1.3; }
+  .bx span { display: block; margin-top: 4px; font-size: 16px; font-weight: 500; line-height: 1.45; }
+  .bx.dim { border: 3px solid var(--grey); }
+  .bx.dash { border: 3px dashed var(--grey); }
+  .bx.ic { padding-left: 66px; }
+  .bx.ic img { position: absolute; left: 14px; top: 12px; width: 40px; height: 40px; }
+  .chip { font-family: var(--font-body); font-size: 16px; font-weight: 900; letter-spacing: 0; padding: 4px 12px; line-height: 1.4; }
+  .chip.grey { background: var(--grey); }
+  .lbl.ink { color: var(--ink); }
+  .fn { position: absolute; font-size: 16px; font-weight: 500; color: #4a4843; line-height: 1.5; white-space: nowrap; }
+  .pt { position: absolute; width: 0; height: 0; }
+  /* ソルバーが動く場所の注記。3 枚の図（architecture・data-trail・request-flow）で同じく、ソルバーの箱の中の最後の行に置く */
+  .bx span.where { margin-top: 6px; color: #4a4843; font-weight: 700; }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <!-- 段 1: あなたの PC -->
+  <div class="lane" id="l1" style="left:0;top:0;width:800px"><span class="lt"><img src="../icons/Client.svg">あなたの PC</span></div>
+  <div class="bx" id="p1" data-self="1" style="left:26px;top:66px;width:340px"><b>PC の作業フォルダ</b><span>wifi.json と ip.json。<br>周囲のアクセスポイントの<br>MAC アドレスと PC の IP アドレス</span></div>
+  <div class="chip hot" id="t1">手順 7 であなたが削除する</div>
+
+  <div class="lbl ink" id="u1">アップロード</div>
+
+  <!-- 段 2: AWS CloudShell -->
+  <div class="lane" id="l2" style="left:0;width:800px"><span class="lt"><img src="../icons/AWSCloudShell.svg">AWS CloudShell</span></div>
+  <div class="bx" id="c1" data-self="1" style="left:26px;width:340px"><b>work フォルダ</b><span>測定値と応答の GeoJSON。<br>推定位置はあなたの居場所を表す</span></div>
+  <div class="chip hot" id="t2">cleanup.sh が削除する</div>
+  <div class="pt" id="c1a" data-self="1"></div><div class="pt" id="c1b" data-self="1"></div>
+
+  <div class="lbl ink" id="u2">測定値</div>
+  <div class="lbl ink" id="u3">応答の GeoJSON</div>
+
+  <!-- 段 3: AWS -->
+  <div class="lane aws" id="l3" style="left:0;width:800px"><span class="lt">AWS</span></div>
+  <div class="bx ic" id="d1" data-self="1" style="left:26px;width:340px"><img src="../icons/AWSIoTCoreDeviceLocation.svg"><b>AWS IoT Core<br>Device Location</b><span>作るリソースは無い</span></div>
+  <div class="pt" id="d1a" data-self="1"></div><div class="pt" id="d1b" data-self="1"></div>
+  <div class="lbl ink" id="u4">呼び出しの記録</div>
+  <div class="bx dim" id="ct" data-self="1" style="left:514px;width:260px"><b>CloudTrail の<br>イベント履歴</b><span>記録されるかは<br>手順 2-5 で確かめる</span></div>
+  <div class="chip grey" id="t3">記録される場合は利用者が削除できない</div>
+
+  <!-- 段 3 の外: ソルバー -->
+  <div class="bx dash" id="sv" data-self="1" style="left:26px;width:340px"><b>第三者のベンダーが<br>提供するソルバー</b><span>IP アドレスは MaxMind<br>Wi-Fi は HERE</span><span class="where">動く場所は API の<br>説明文に書かれていない</span></div>
+  <div class="chip grey" id="t4">送った測定値の扱いは<br>API の仕様に書かれていない</div>
+
+  <div class="fn" id="fn">ソルバーの名前は API の説明文による</div>
+</div>
+<script>
+// 縦の位置は、箱の実際の高さから計算する（段の間 72px、枠と中身の間 24px 以上）
+window.addEventListener('load', async () => { await document.fonts.ready;
+  const $ = (id) => document.getElementById(id);
+  const H = (id) => Math.ceil($(id).getBoundingClientRect().height);
+  const W = (id) => Math.ceil($(id).getBoundingClientRect().width);
+  const put = (id, l, t) => { if (l !== null) $(id).style.left = l + 'px'; $(id).style.top = t + 'px'; };
+  const LT = 66;          // レーンの上端から中身の上端（題の下端 約 40px ＋ 24px 以上）
+  const PAD = 26;         // 中身の下端からレーンの下端（24px ＋ 枠線 2px）
+  const GAP = 72;         // 段の間
+
+  // 段 1
+  let y = 0;
+  const p1t = y + LT; put('p1', null, p1t);
+  put("t1", 774 - W("t1"), Math.round(p1t + (H("p1") - H("t1")) / 2));
+  const l1h = LT + H('p1') + PAD; $('l1').style.height = l1h + 'px';
+  // 段 2
+  y = l1h + GAP; $('l2').style.top = y + 'px';
+  const c1t = y + LT; put('c1', null, c1t);
+  put("t2", 774 - W("t2"), Math.round(c1t + (H("c1") - H("t2")) / 2));
+  const l2h = LT + H('c1') + PAD; $('l2').style.height = l2h + 'px';
+  put('u1', 208, l1h + (GAP - H('u1')) / 2);
+  // 段 3
+  y = y + l2h + GAP; $('l3').style.top = y + 'px';
+  const d1t = y + LT; put('d1', null, d1t);
+  const rowH = Math.max(H('d1'), H('ct'));
+  $('d1').style.height = rowH + 'px'; $('ct').style.height = rowH + 'px';
+  put('ct', null, d1t);
+  put('t3', 774 - W('t3'), d1t + rowH + 16);
+  const l3h = LT + rowH + 16 + H('t3') + PAD; $('l3').style.height = l3h + 'px';
+  put('u4', 366 + (148 - W('u4')) / 2, d1t + rowH / 2 - 8 - H('u4'));
+  // 段 2 と段 3 の間の 2 本の矢印（x=136 下向き、x=256 上向き）
+  const c1b = c1t + H('c1'), mid = l2h + (y - l2h) + 0;
+  put('c1a', 136, c1b); put('c1b', 256, c1b); put('d1a', 136, d1t); put('d1b', 256, d1t);
+  const gapTop = parseFloat($('l2').style.top) + l2h;
+  put('u2', 146, gapTop + (GAP - H('u2')) / 2);
+  put('u3', 266, gapTop + (GAP - H('u3')) / 2);
+  // ソルバー
+  const svt = y + l3h + 56; put('sv', null, svt);
+  put("t4", 400, Math.round(svt + (H("sv") - H("t4")) / 2));
+  const fnt = svt + H('sv') + 24; put('fn', 0, fnt);
+  $('fig').style.height = (fnt + H('fn')) + 'px';
+
+  wire('#p1', '#c1', {from: 'b', to: 't'});
+  wire('#c1a', '#d1a', {from: 'b', to: 't'});
+  wire('#d1b', '#c1b', {from: 't', to: 'b'});
+  wire('#d1', '#ct', {});
+  wire('#d1', '#sv', {from: 'b', to: 't'});
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

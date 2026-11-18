@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- wifi-scan: PC のスクリプトが wifi.json を作成するまで（README の手順 3-2 の Windows の場合。記事では使わない）。
+     根拠:
+     - Wi-Fi の測定値は MacAddress と Rss（dBm、-128〜0 の整数）の組。SSID を送る項目は無い（factsheet iotdl-010）
+     - netsh の「シグナル」は百分率。Microsoft のドキュメントの wlanSignalQuality は 0 % ＝ -100 dBm、100 % ＝ -50 dBm の線形補間。
+       netsh の表示が同じ値かは書かれていないため、換算「dBm ≒ シグナル ÷ 2 − 100」は近似（iotdl-080）
+     - nmcli の SIGNAL から戻すと「dBm ≒ SIGNAL × 0.6 − 100」の近似（iotdl-081）。iw は dBm を直接表示する
+     - ローカル管理アドレスを除く理由は、送るアドレスを減らすため（iotdl-078、README の手順 3-2）
+     - スクリプトの処理 1〜5 は hands-on/pc/scan-wifi-windows.ps1 と README の手順 3-2 の番号付きの説明 1〜5 と同じ。
+       6 は、MAC アドレスを ToUpperInvariant() で大文字にし、ハイフンをコロンに置き換える処理（scan-wifi-windows.ps1 の 89 行目）。
+       netsh の例は小文字、wifi.json は大文字のため、その変換を 6 として足した（README の説明にも 6 を足す）
+     - 値は説明用（00:00:5e:00:53:01〜02）。数値の整合: 96 ÷ 2 − 100 ＝ −52、66 ÷ 2 − 100 ＝ −67（README の netsh の例と同じ）
+     幅の計算（DESIGN 6.0、6.5）:
+     - 左の列 400・列の間 56・右の列 344 ＝ 800
+     - 左上のカードの最長の行「    BSSID 1   : 00:00:5e:00:53:01」は 33 文字 × 9px ＝ 297px ＋ 30px ＝ 327px（400px で余裕 73px）
+     - 左下のカードの最長の行「    "MacAddress": "00:00:5E:00:53:01",」は 38 文字 × 9px ＝ 342px ＋ 30px ＝ 372px（400px で余裕 28px）
+     - 右の箱の文字の幅は 344 − 6 − 24 ＝ 314px。番号の分 26px を引いて 288px（16px で 18 文字）。6 の行だけ 2 行に折り返す
+     - 2 の換算の式は、2 の行の真下に字下げして置く（どこにもつながらない箱を作らない）。最長の「dBm ≒ SIGNAL × 0.6 − 100」は 24 文字 × 9px ＝ 216px
+     - 読む順番: 左上の netsh の一覧 → 右の「スクリプトが行うこと」→ 左下の wifi.json。2 本の矢印はどちらも水平で、
+       1 本目は左上のカードの中心の高さ、2 本目は左下のカードの中心の高さに引く。右の箱の高さは、左の列の高さにそろえる -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 560px; }
+  .card > .h small { font-size: 16px; font-weight: 700; color: #cfcabd; margin-left: 10px; }
+  .card.hot > .h { font-family: var(--font-mono); font-weight: 800; }
+  .card > pre .ja { font-family: var(--font-body); font-weight: 700; }
+  .steps { list-style: none; margin: 10px 0 0; padding: 0; }
+  .steps li { font-size: 16px; font-weight: 500; line-height: 1.45; padding-left: 26px; text-indent: -26px; margin-top: 10px; }
+  .steps li .n { display: inline-block; width: 26px; text-indent: 0; font-family: var(--font-mono); font-weight: 800; color: var(--hot); }
+  .cvs { margin: 12px 0 4px 26px; padding: 2px 0 4px 12px; border-left: 3px solid var(--line); }
+  .cvs > b { display: block; font-size: 16px; font-weight: 900; line-height: 1.4; }
+  .cv { margin-top: 10px; }
+  .cv div { font-size: 16px; font-weight: 700; line-height: 1.4; }
+  .cv code { display: block; margin-top: 2px; font-family: var(--font-mono); font-weight: 800; font-size: 15px; line-height: 1.5; white-space: nowrap; }
+  .cv > span { display: block; margin-top: 2px; font-size: 16px; font-weight: 500; line-height: 1.4; }
+  .pt { position: absolute; width: 0; height: 0; }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <!-- 左上: netsh の一覧（説明用の値） -->
+  <div class="card" id="raw" style="left:0;top:0;width:400px">
+    <div class="h">PC の Wi-Fi の一覧<small>netsh の例</small></div>
+<pre>SSID 1 : <span class="ja">&lt;ネットワーク名&gt;</span>
+    BSSID 1   : <b>00:00:5e:00:53:01</b>
+         <span class="ja">シグナル</span> : <b>96%</b>
+    BSSID 2   : <b>00:00:5e:00:53:02</b>
+         <span class="ja">シグナル</span> : <b>66%</b></pre>
+  </div>
+
+  <!-- 右: スクリプトが行うこと（README の手順 3-2 の 1〜5 と、MAC アドレスの形をそろえる 6） -->
+  <div class="st" id="do" data-self="1" style="left:456px;top:0;width:344px"><b>スクリプトが行うこと</b>
+    <ul class="steps">
+      <li><span class="n">1</span>BSSID とシグナルを取り出す</li>
+      <li><span class="n">2</span>シグナルを受信信号強度に換算する</li>
+    </ul>
+    <div class="cvs"><b>2 の換算は近似</b>
+      <div class="cv"><div>Windows の netsh のシグナル</div><code>dBm <span class="op">≒</span> シグナル <span class="op">÷</span> 2 <span class="op">−</span> 100</code></div>
+      <div class="cv"><div>Linux の nmcli の SIGNAL</div><code>dBm <span class="op">≒</span> SIGNAL <span class="op">×</span> 0.6 <span class="op">−</span> 100</code></div>
+      <div class="cv"><div>Linux の iw</div><span>dBm を直接表示する</span></div>
+    </div>
+    <ul class="steps">
+      <li><span class="n">3</span>ローカル管理アドレスを除く</li>
+      <li><span class="n">4</span>強い順に最大 10 台を残す</li>
+      <li><span class="n">5</span>SSID は書き出さない</li>
+      <li><span class="n">6</span>MAC アドレスを<br>大文字・コロン区切りにそろえる</li>
+    </ul>
+  </div>
+  <div class="pt" id="p1" data-self="1"></div><div class="pt" id="p2" data-self="1"></div>
+
+  <!-- 左下: wifi.json -->
+  <div class="card hot" id="json" style="left:0;width:400px">
+    <div class="h">wifi.json</div>
+<pre>[
+  {
+    "MacAddress": "<b>00:00:5E:00:53:01</b>",
+    "Rss": <b>-52</b>
+  },
+  {
+    "MacAddress": "<b>00:00:5E:00:53:02</b>",
+    "Rss": <b>-67</b>
+  }
+]</pre>
+  </div>
+</div>
+<script>
+// 縦の位置は、箱の実際の高さから計算する
+window.addEventListener('load', async () => { await document.fonts.ready;
+  const $ = (id) => document.getElementById(id);
+  const H = (id) => Math.ceil($(id).getBoundingClientRect().height);
+  const put = (id, l, t) => { $(id).style.left = l + 'px'; $(id).style.top = Math.round(t) + 'px'; };
+  const doH = H('do'), rawH = H('raw'), jsH = H('json');
+  const gap = Math.max(48, doH - rawH - jsH);   // 左の列の 2 枚のカードの間（48px 以上）
+  const total = rawH + gap + jsH;
+  $('json').style.top = (rawH + gap) + 'px';
+  $('do').style.height = total + 'px';
+  $('fig').style.height = total + 'px';
+  put('p1', 456, rawH / 2);
+  put('p2', 456, rawH + gap + jsH / 2);
+  wire('#raw', '#p1', {from: 'r', to: 'l'});
+  wire('#p2', '#json', {from: 'l', to: 'r'});
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

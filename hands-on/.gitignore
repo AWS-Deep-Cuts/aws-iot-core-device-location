@@ -1,0 +1,6 @@
+# ハンズオンの作業ファイル。あなたの居場所に結び付く測定値と応答を含むため、リポジトリに入れない
+handson.env
+work/
+*.geojson
+wifi*.json
+ip.json
