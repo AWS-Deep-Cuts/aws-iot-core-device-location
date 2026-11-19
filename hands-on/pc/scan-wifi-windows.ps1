@@ -12,6 +12,11 @@
   -OutDir で、保存先のフォルダを変えられます。既定は現在のフォルダです。
 
   スクリプトが行うこと:
+    0. Wi-Fi の再スキャンを依頼し、4 秒待つ。netsh wlan show networks は、Windows が最後に
+       スキャンした結果を表示するだけで、自分ではスキャンしません。そのままでは接続中の
+       アクセスポイントしか表示されないことがあるため、WLAN API の WlanScan を呼びます。
+       管理者の権限は要りません。Microsoft のドキュメントでは、ドライバーは 4 秒以内に
+       スキャンを終えることになっています。依頼できなかった場合も、そのまま netsh の結果を読みます。
     1. netsh wlan show networks mode=bssid の出力から、BSSID とシグナルを取り出す。
        BSSID は、アクセスポイントの MAC アドレスです。行の名前は表示の言語で変わるため、
        値の形で読み取ります（日本語の「シグナル」と英語の「Signal」の両方で動きます）。
@@ -51,8 +56,52 @@ Write-Host '━━━━━━━━━━━━━━━━━━━━━━�
 Write-Host ''
 Write-Host '測定の方法: netsh wlan show networks mode=bssid（シグナルの百分率から dBm ≒ シグナル ÷ 2 − 100 で近似）'
 
+# ─── 0. Wi-Fi の再スキャンを依頼する ─────────────────────────────
+# netsh は最後のスキャンの結果を表示するだけなので、先に WlanScan で再スキャンを依頼する。
+# WLAN_INTERFACE_INFO_LIST は、件数と index（各 4 バイト）の後に、
+# WLAN_INTERFACE_INFO（GUID 16 バイト + WCHAR[256] 512 バイト + 状態 4 バイト = 532 バイト）が並ぶ。
+try {
+  if (-not ('DeepCutsWlanRescan' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class DeepCutsWlanRescan {
+  [DllImport("wlanapi.dll")] static extern uint WlanOpenHandle(uint clientVersion, IntPtr reserved, out uint negotiatedVersion, out IntPtr handle);
+  [DllImport("wlanapi.dll")] static extern uint WlanCloseHandle(IntPtr handle, IntPtr reserved);
+  [DllImport("wlanapi.dll")] static extern uint WlanEnumInterfaces(IntPtr handle, IntPtr reserved, out IntPtr list);
+  [DllImport("wlanapi.dll")] static extern uint WlanScan(IntPtr handle, ref Guid iface, IntPtr ssid, IntPtr ie, IntPtr reserved);
+  [DllImport("wlanapi.dll")] static extern void WlanFreeMemory(IntPtr memory);
+  public static int Scan() {
+    uint negotiated;
+    IntPtr handle;
+    if (WlanOpenHandle(2, IntPtr.Zero, out negotiated, out handle) != 0) return 0;
+    int requested = 0;
+    try {
+      IntPtr list;
+      if (WlanEnumInterfaces(handle, IntPtr.Zero, out list) != 0) return 0;
+      try {
+        int count = Marshal.ReadInt32(list);
+        for (int i = 0; i < count; i++) {
+          IntPtr item = new IntPtr(list.ToInt64() + 8 + i * 532);
+          Guid iface = (Guid)Marshal.PtrToStructure(item, typeof(Guid));
+          if (WlanScan(handle, ref iface, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero) == 0) requested++;
+        }
+      } finally { WlanFreeMemory(list); }
+    } finally { WlanCloseHandle(handle, IntPtr.Zero); }
+    return requested;
+  }
+}
+'@
+  }
+  if ([DeepCutsWlanRescan]::Scan() -gt 0) {
+    Start-Sleep -Seconds 4
+  }
+} catch {
+  # 再スキャンを依頼できなくても、netsh が表示する最後のスキャンの結果で続ける
+}
+
 # ─── 1. netsh の出力から BSSID とシグナルを取り出す ─────────────────
-$raw = @(& netsh wlan show networks mode=bssid | ForEach-Object { [string]$_ })
+$raw =@(& netsh wlan show networks mode=bssid | ForEach-Object { [string]$_ })
 $netshExit = $LASTEXITCODE
 
 $found = New-Object System.Collections.Generic.List[object]
